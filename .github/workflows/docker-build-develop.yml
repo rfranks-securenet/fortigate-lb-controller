@@ -10,12 +10,12 @@ env:
 
 
 jobs:
-  permissions:
-    contents: read
-    packages: write
-    attestations: write
-    id-token: write
   build:
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     if: github.repository_owner == 'sncs-uk'
     runs-on: ubuntu-latest
     steps:
