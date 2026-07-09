@@ -33,6 +33,9 @@ controller:
   # Existing secret that will be mounted as env vars
   existingSecret: ""
 
+  # Existing config map that will be mounted as env vars
+  existingConfigMap: ""
+
   # Heritage is what the controller marks as the owner of the VIPs. Only relavent if you have multiple
   # controllers managing VIPs in the same VDOM
   heritage: "kubernetes"

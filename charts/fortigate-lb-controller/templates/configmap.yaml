@@ -1,3 +1,4 @@
+{{- if not .Values.controller.existingConfigMap -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,3 +11,4 @@ data:
   FORTIOS_INSECURE: "{{ .Values.controller.fortigate.insecure }}"
   LOG_LEVEL: "{{ .Values.controller.loglevel }}"
   VIP_HERITAGE: "{{ .Values.controller.heritage }}"
+{{- end -}}

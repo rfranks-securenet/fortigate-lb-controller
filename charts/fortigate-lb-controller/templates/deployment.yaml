@@ -50,8 +50,13 @@ spec:
             - secretRef:
                 name: {{ include "fortigate-lb-controller.secretName" . }}
           {{- end }}
+          {{- if .Values.controller.existingConfigMap }}
+            - configMapRef:
+                name: {{ .Values.controller.existingConfigMap }}
+          {{- else }}
             - configMapRef:
                 name: {{ include "fortigate-lb-controller.configName" . }}
+          {{- end }}
           env:
             - name: POD_NAME
               valueFrom:
