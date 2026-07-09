@@ -18,6 +18,16 @@ rules:
   - "update"
   - "patch"
 - apiGroups:
+  - "rbac.authorization.k8s.io"
+  resources:
+  - "clusterrolebindings"
+  - "clusterroles"
+  verbs:
+  - "get"
+  - "list"
+  - "update"
+  - "patch"
+- apiGroups:
   - "sncs-uk.io"
   resources:
   - "lbpools"

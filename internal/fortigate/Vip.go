@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"regexp"
 
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 	forticlient "github.com/sncs-uk/fortigate-sdk-go/sdk/sdkcore"
 )
 
@@ -75,7 +76,7 @@ func (v *Vip) parseDescription() {
 	parts := re.FindAllStringSubmatch(description, -1)
 
 	if parts == nil {
-		slog.Debug("vip has malformed comment", slog.String("vip", v.vip.Name))
+		eslog.Noisy("vip has malformed comment", slog.String("vip", v.vip.Name))
 		return
 	}
 	v.Owner = parts[0][1]

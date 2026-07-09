@@ -3,6 +3,8 @@ package k8s
 import (
 	"log/slog"
 	"net/netip"
+
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 )
 
 type IpPoolList struct {
@@ -21,20 +23,21 @@ func (l *IpPoolList) Fetch() (ok bool) {
 	lbpools, err := l.client.getLoadBalancerPools()
 	ok = true
 	if err != nil {
-		slog.Error("Could not retreive LoadBalancerPools", slog.String("error", err.Error()))
+		eslog.Error("Could not retreive LoadBalancerPools", slog.String("error", err.Error()))
 		ok = false
 		return
 	}
+	eslog.Debug("Found pools", slog.Int("pool_count", len(lbpools.Items)))
 
 	l.pools = make(map[string]*IpPool)
 	for _, lbpool := range lbpools.Items {
 		pool := new(IpPool)
 		err = pool.fromCRD(&lbpool)
 		if err != nil {
-			slog.Warn("Failed to parse pool", slog.Any("lb_pool", lbpool.Metadata.Name))
+			eslog.Warn("Failed to parse pool", slog.Any("lb_pool", lbpool.Metadata.Name))
 			continue
 		}
-		slog.Debug("Discovered pool", slog.String("pool", pool.Name))
+		eslog.Debug("Discovered pool", slog.String("pool", pool.Name))
 		l.pools[pool.Name] = pool
 	}
 	return
@@ -60,7 +63,6 @@ func (l *IpPoolList) Items() (pools []*IpPool) {
 func (l *IpPoolList) MarkAddressAsUsed(address netip.Addr) (ok bool) {
 	for _, pool := range l.pools {
 		if pool.Contains(address) {
-			slog.Debug("Marking address as used in pool", slog.String("address", address.String()), slog.String("pool", pool.Name))
 			pool.Assign(address.String())
 			return true
 		}

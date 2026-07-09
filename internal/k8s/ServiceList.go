@@ -1,6 +1,10 @@
 package k8s
 
-import "log/slog"
+import (
+	"log/slog"
+
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
+)
 
 type ServiceList struct {
 	services map[string]*Service
@@ -18,7 +22,7 @@ func (l *ServiceList) Fetch() (ok bool) {
 	services, err := l.client.getServices()
 	ok = true
 	if err != nil {
-		slog.Error("Could not retrieve services", slog.String("error", err.Error()))
+		eslog.Error("Could not retrieve services", slog.String("error", err.Error()))
 		ok = false
 		return
 	}
@@ -28,10 +32,10 @@ func (l *ServiceList) Fetch() (ok bool) {
 		service := new(Service)
 		err = service.createFromV1(&v1service, l.client)
 		if err != nil {
-			slog.Debug("Unable to parse service", slog.String("service", v1service.Name))
+			eslog.Debug("Unable to parse service", slog.String("service", v1service.Name))
 			continue
 		}
-		slog.Debug("Discovered service", slog.String("service", v1service.Name))
+		eslog.Debug("Discovered service", slog.String("service", v1service.Name))
 		l.services[service.Name] = service
 	}
 	return

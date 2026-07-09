@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sncs-uk/fortigate-lb-controller/internal/config"
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 	"github.com/sncs-uk/fortigate-lb-controller/internal/fortigate"
 	"github.com/sncs-uk/fortigate-lb-controller/internal/k8s"
 )
@@ -29,10 +30,11 @@ func Run() {
 
 	go poolStats()
 
-	for !isKilled {
+	eslog.Debug("Entering loop")
+
+	for {
 		RunLoop()
 		time.Sleep(2 * time.Second)
-		checkDeployment()
 	}
 }
 
@@ -41,113 +43,74 @@ func startupChecks() {
 	// Check fortigate connectivity
 	fortigate_client, err = fortigate.Init()
 	if err != nil {
-		slog.Error("Could not initiate FortiGate client", slog.String("error", err.Error()))
+		eslog.Crit("Could not initiate FortiGate client", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 
 	// Check Kubernetes connectivity
 	kubernetes_client, err = k8s.Init()
 	if err != nil {
-		slog.Error("Could not initiate Kubernetes API client", slog.String("error", err.Error()))
+		eslog.Crit("Could not initiate Kubernetes API client", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
 }
 
 func GetObjects() (pools *k8s.IpPoolList, vips *fortigate.VipList, services *k8s.ServiceList) {
+	eslog.Debug("Getting pools")
 	pools = k8s.CreateIpPoolList(kubernetes_client)
 	ok := pools.Fetch()
 	if !ok {
+		eslog.Crit("Could not get IP Pool list")
 		os.Exit(1)
 	}
 
 	// Get VIPs
+	eslog.Debug("Getting VIPs")
 	vips = fortigate.CreateVipList(fortigate_client)
 	ok = vips.Fetch()
 	if !ok {
+		eslog.Crit("Could not get VIPs")
 		os.Exit(1)
 	}
 
 	// Get services
+	eslog.Debug("Getting Services")
 	services = k8s.CreateServiceList(kubernetes_client)
 	ok = services.Fetch()
 	if !ok {
+		eslog.Crit("Could not get services")
 		os.Exit(1)
 	}
 	return
-}
-
-func checkDeployment() {
-	// First, we check if the deployment has the finaliser on it
-	err := kubernetes_client.CheckFinalizers()
-	if err != nil {
-		slog.Warn("Error checking finalizers", slog.String("error", err.Error()))
-	}
-
-	// Check if the deployment has been marked for removal
-
-	deleted, err := kubernetes_client.CheckDeploymentDeleted()
-	if err != nil {
-		slog.Warn("Couldn't get deployment", slog.String("error", err.Error()))
-		return
-	}
-	if deleted {
-		slog.Info("Deployment has been marked for deletion; cleaning up")
-		// We have been deleted!
-
-		// We need to delete all the things
-		slog.Info("Removing LoadBalancer IPs from Services")
-		for _, service := range services.Items() {
-			if !service.IsFortigateEnabled() {
-				continue
-			}
-			slog.Info("Removing external addresses from service", slog.String("service", service.Name))
-			service.RemoveAllExternalAddresses()
-			slog.Info("Removing annotations from service", slog.String("service", service.Name))
-			delete(service.Annotations, config.VipV4Annotation)
-			delete(service.Annotations, config.VipV6Annotation)
-			service.Commit()
-		}
-
-		slog.Info("Removing VIPs from FortiGate")
-		for _, vip := range vips.FindByOwner(config.Heritage) {
-			slog.Info("Removing VIP", slog.String("vip", vip.Name()))
-			fortigate_client.DeleteVip(vip)
-		}
-
-		// Ok, we've removed everything, we can remove the finalizer
-		slog.Info("Removing finalizer")
-		err := kubernetes_client.RemoveFinalizers()
-		if err != nil {
-			slog.Warn("Unable to remove finalizer", slog.String("error", err.Error()))
-		}
-	}
 }
 
 func RunLoop() {
 	// Get LB pools
 	pools, vips, services = GetObjects()
 
+	eslog.Debug("Getting VIPs")
 	for _, vip := range vips.Items() {
 		extip, err := netip.ParseAddr(vip.Extip)
 		if err != nil {
+			eslog.Warn("Could not parse VIP")
 			continue
 		}
 		for _, pool := range pools.Items() {
 			if pool.Contains(extip) {
 				if !pool.MustAssign(extip) {
 					// There was an error assigning this VIP, that means there's a fault somewhere
-					slog.Error("Could not mark address as used", slog.String("address", extip.String()), slog.String("pool", pool.Name))
+					eslog.Error("Could not mark address as used", slog.String("address", extip.String()), slog.String("pool", pool.Name))
 					continue
 				}
 			}
 		}
 	}
 
-	slog.Debug("Processing services")
+	eslog.Debug("Processing services")
 	for _, service := range services.Items() {
 		poolName, ok := service.GetPool()
 		if !ok {
-			slog.Debug("Invalid pool detected", slog.String("service", service.Name), slog.String("pool", poolName))
+			eslog.Debug("Invalid pool detected", slog.String("service", service.Name), slog.String("pool", poolName))
 			continue
 		}
 		pool, ok := pools.GetByName(poolName)
@@ -157,13 +120,11 @@ func RunLoop() {
 			vipName, ok := service.GetVipNameV4()
 			if ok {
 				vip, ok := vips.FindByName(vipName)
-				slog.Debug("Searching by name", slog.String("vip_name", vipName))
-				slog.Debug("Result", slog.Any("vip", vip))
 				if ok {
 					// found the Vip, lets remove it
 					err := fortigate_client.DeleteVip(vip)
 					if err != nil {
-						slog.Error("Unable to delete VIP", slog.String("vip", vip.Name()), slog.String("error", err.Error()))
+						eslog.Warn("Unable to delete VIP", slog.String("vip", vip.Name()), slog.String("error", err.Error()))
 						continue
 					}
 					delete(service.Annotations, config.VipV4Annotation)
@@ -176,7 +137,7 @@ func RunLoop() {
 					// found the Vip, lets remove it
 					err := fortigate_client.DeleteVip(vip)
 					if err != nil {
-						slog.Error("Unable to delete VIP", slog.String("vip", vip.Name()), slog.String("error", err.Error()))
+						slog.Warn("Unable to delete VIP", slog.String("vip", vip.Name()), slog.String("error", err.Error()))
 						continue
 					}
 					delete(service.Annotations, config.VipV6Annotation)
@@ -204,7 +165,7 @@ func RunLoop() {
 			}
 			_, ok = vips.FindByName(v4Name)
 			if !ok {
-				slog.Warn("vip missing for service, re-creating", slog.String("service", service.Name))
+				eslog.Info("vip missing for service, re-creating", slog.String("service", service.Name))
 				// This VIP doesn't exist, but should - create it
 				vip := fortigate.CreateVip(service.GetExternalAddressV4(), service.GetInternalAddressV4(), config.Heritage, service.Name, service.Namespace)
 				vip.Save(fortigate_client)
@@ -212,7 +173,7 @@ func RunLoop() {
 			}
 			_, err := pool.Assign(service.GetExternalAddressV4().String())
 			if err != nil {
-				slog.Debug("Unable to assign address", slog.String("address", service.GetExternalAddressV6().String()))
+				eslog.Debug("Unable to assign address", slog.String("address", service.GetExternalAddressV6().String()))
 			}
 		}
 
@@ -225,14 +186,14 @@ func RunLoop() {
 			_, ok = vips.FindByName(v6Name)
 			if !ok {
 				// This VIP doesn't exist, but should - create it
-				slog.Warn("vip missing for service, re-creating", slog.String("service", service.Name))
+				eslog.Info("vip missing for service, re-creating", slog.String("service", service.Name))
 				vip := fortigate.CreateVip(service.GetExternalAddressV6(), service.GetInternalAddressV6(), config.Heritage, service.Name, service.Namespace)
 				vip.Save(fortigate_client)
 				service.Annotations[config.VipV6Annotation] = vip.Name()
 			}
 			_, err := pool.Assign(service.GetExternalAddressV6().String())
 			if err != nil {
-				slog.Debug("Unable to assign address", slog.String("address", service.GetExternalAddressV6().String()))
+				eslog.Debug("Unable to assign address", slog.String("address", service.GetExternalAddressV6().String()))
 			}
 		}
 
@@ -264,7 +225,7 @@ func RunLoop() {
 	for _, vip := range vips.FindByOwner(config.Heritage) {
 		_, ok := services.GetByVipName(vip.Name())
 		if !ok {
-			slog.Info("Found orphaned VIP, cleaning up", slog.String("vip", vip.Name()), slog.String("service", vip.Service), slog.String("namespace", vip.Namespace))
+			eslog.Info("Found orphaned VIP, cleaning up", slog.String("vip", vip.Name()), slog.String("service", vip.Service), slog.String("namespace", vip.Namespace))
 			// This VIP is not assocaited with a service anymore, it should be removed
 			fortigate_client.DeleteVip(vip)
 		}

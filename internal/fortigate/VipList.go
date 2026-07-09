@@ -5,6 +5,7 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 	forticlient "github.com/sncs-uk/fortigate-sdk-go/sdk/sdkcore"
 )
 
@@ -24,7 +25,7 @@ func (l *VipList) Fetch() (ok bool) {
 	list, err := l.client.getVips()
 	ok = true
 	if err != nil {
-		slog.Error("Could not retreive VIPs", slog.String("error", err.Error()))
+		eslog.Error("Could not retreive VIPs", slog.String("error", err.Error()))
 		ok = false
 		return
 	}
@@ -34,10 +35,10 @@ func (l *VipList) Fetch() (ok bool) {
 		vip := new(Vip)
 		err = vip.fromJsonObject4(jsonVip)
 		if err != nil {
-			slog.Debug("Failed to parse vip", slog.String("vip", jsonVip.Name))
+			eslog.Debug("Failed to parse vip", slog.String("vip", jsonVip.Name))
 			continue
 		}
-		slog.Debug("Discovered vip", slog.String("vip", jsonVip.Name))
+		eslog.Noisy("Discovered vip", slog.String("vip", jsonVip.Name))
 		l.vips[jsonVip.Name] = vip
 	}
 	list6, err := l.client.getVip6s()
@@ -51,10 +52,10 @@ func (l *VipList) Fetch() (ok bool) {
 		vip := new(Vip)
 		err = vip.fromJsonObject6(jsonVip)
 		if err != nil {
-			slog.Debug("Failed to parse vip", slog.String("vip", jsonVip.Name))
+			eslog.Debug("Failed to parse vip", slog.String("vip", jsonVip.Name))
 			continue
 		}
-		slog.Debug("Discovered vip", slog.String("vip", jsonVip.Name))
+		eslog.Noisy("Discovered vip", slog.String("vip", jsonVip.Name))
 		l.vips[jsonVip.Name] = vip
 	}
 	return

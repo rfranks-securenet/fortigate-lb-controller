@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/sncs-uk/fortigate-lb-controller/internal/config"
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -175,26 +176,26 @@ func (s *Service) GetPool() (pool string, ok bool) {
 func (s *Service) commitStatus() (ok bool) {
 	ok = true
 	if len(s.toAdd)+len(s.toRemove) == 0 {
-		slog.Debug("Refusing to do a null update on service", slog.String("service", s.Name))
+		eslog.Noisy("Refusing to do a null update on service", slog.String("service", s.Name))
 		return
 	}
 	for _, address := range s.toAdd {
 		if s.HasExternalAddress(address) {
 			continue
 		}
-		slog.Debug("Adding address", slog.String("service", s.Name), slog.String("address", address.String()))
+		eslog.Noisy("Adding address", slog.String("service", s.Name), slog.String("address", address.String()))
 		s.service.Status.LoadBalancer.Ingress = append(s.service.Status.LoadBalancer.Ingress, corev1.LoadBalancerIngress{IP: address.String()})
 	}
 	for _, address := range s.toRemove {
 		if !s.HasExternalAddress(address) {
 			continue
 		}
-		slog.Debug("Removing address", slog.String("service", s.Name), slog.String("address", address.String()))
+		eslog.Noisy("Removing address", slog.String("service", s.Name), slog.String("address", address.String()))
 		s.service.Status.LoadBalancer.Ingress = slices.Delete(s.service.Status.LoadBalancer.Ingress, slices.Index(s.GetExternalAddresses(), address), slices.Index(s.GetExternalAddresses(), address)+1)
 	}
 	err := s.client.updateServiceStatus(s.service)
 	if err != nil {
-		slog.Warn("Error updating service status", slog.String("service", s.Name), slog.String("error", err.Error()))
+		eslog.Warn("Error updating service status", slog.String("service", s.Name), slog.String("error", err.Error()))
 		ok = false
 	}
 	return
@@ -235,16 +236,16 @@ func (s *Service) Commit() (ok bool) {
 func (s *Service) CheckExistingLbIps(pools map[string]*IpPool) {
 	for _, ip := range s.GetExternalAddresses() {
 		if (ip.Is4() && !s.WantsIpv4()) || (ip.Is6() && !s.WantsIpv6()) {
-			slog.Debug("Removing IP from service, as not in ipFamilies", slog.String("service", s.Name), slog.String("ip", ip.String()))
+			eslog.Noisy("Removing IP from service, as not in ipFamilies", slog.String("service", s.Name), slog.String("ip", ip.String()))
 			s.RemoveExternalAddress(ip)
 			continue
 		}
 		pool := pools[s.desiredPool]
 		if pool.Contains(ip) {
-			slog.Debug("Pool contains IP", slog.String("pool", pool.Name), slog.String("address", ip.String()))
+			eslog.Noisy("Pool contains IP", slog.String("pool", pool.Name), slog.String("address", ip.String()))
 			continue
 		}
-		slog.Debug("Removing IP from service, as not in pool", slog.String("service", s.Name), slog.String("pool", s.desiredPool), slog.String("ip", ip.String()))
+		eslog.Noisy("Removing IP from service, as not in pool", slog.String("service", s.Name), slog.String("pool", s.desiredPool), slog.String("ip", ip.String()))
 		s.RemoveExternalAddress(ip)
 	}
 
@@ -259,20 +260,20 @@ func (s *Service) AssignServiceIps(pools *IpPoolList) (ipv4 netip.Addr, ipv6 net
 	if s.NeedsIpv6() {
 		addressv6, err := pool.Assign("::")
 		if err != nil {
-			slog.Warn("Error assigning address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("error", err.Error()))
+			eslog.Warn("Error assigning address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("error", err.Error()))
 			ok = false
 		} else {
-			slog.Debug("Assigning IPv6 address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("address", addressv6))
+			eslog.Noisy("Assigning IPv6 address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("address", addressv6))
 			ipv6 = netip.MustParseAddr(addressv6)
 		}
 	}
 	if s.NeedsIpv4() {
 		addressv4, err := pool.Assign("0.0.0.0")
 		if err != nil {
-			slog.Warn("Error assigning address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("error", err.Error()))
+			eslog.Warn("Error assigning address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("error", err.Error()))
 			ok = false
 		} else {
-			slog.Debug("Assigning IPv4 address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("address", addressv4))
+			eslog.Noisy("Assigning IPv4 address", slog.String("service", s.Name), slog.String("pool", pool.Name), slog.String("address", addressv4))
 			ipv4 = netip.MustParseAddr(addressv4)
 		}
 	}

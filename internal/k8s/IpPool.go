@@ -7,6 +7,8 @@ import (
 	"net/netip"
 	"slices"
 
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
+
 	ciliumip "github.com/cilium/cilium/pkg/ip"
 )
 
@@ -42,7 +44,7 @@ func (p *IpPool) fromCRD(crd *LoadBalancerPool) (err error) {
 		p.ipv4 = net4
 		p.availableIpv4 = ips
 		for _, v4 := range crd.Spec.ExcludeV4 {
-			slog.Debug("Removing excluded address", slog.String("pool", p.Name), slog.String("address", v4))
+			eslog.Noisy("Removing excluded address", slog.String("pool", p.Name), slog.String("address", v4))
 			addr, _ := netip.ParseAddr(v4)
 			p.removeAvailable(addr)
 		}
@@ -62,7 +64,7 @@ func (p *IpPool) fromCRD(crd *LoadBalancerPool) (err error) {
 		p.ipv6 = net6
 		p.availableIpv6 = ips
 		for _, v6 := range crd.Spec.ExcludeV6 {
-			slog.Debug("Removing excluded address", slog.String("pool", p.Name), slog.String("address", v6))
+			eslog.Noisy("Removing excluded address", slog.String("pool", p.Name), slog.String("address", v6))
 			addr, _ := netip.ParseAddr(v6)
 			p.removeAvailable(addr)
 		}
@@ -132,14 +134,16 @@ func (p *IpPool) availableV6() (count int) {
 func (p *IpPool) removeAvailable(address netip.Addr) error {
 	if address.Is4() {
 		if slices.Contains(p.availableIpv4, address.String()) {
-			slog.Debug("Marking address as used", slog.String("pool", p.Name), slog.String("address", address.String()))
+			eslog.Noisy("Marking address as used", slog.String("pool", p.Name), slog.String("address", address.String()))
 			p.availableIpv4 = slices.Delete(p.availableIpv4, slices.Index(p.availableIpv4, address.String()), slices.Index(p.availableIpv4, address.String())+1)
+			eslog.Noisy("Done")
 			return nil
 		}
 	} else if address.Is6() {
 		if slices.Contains(p.availableIpv6, address.String()) {
-			slog.Debug("Marking address as used", slog.String("pool", p.Name), slog.String("address", address.String()))
+			eslog.Noisy("Marking address as used", slog.String("pool", p.Name), slog.String("address", address.String()))
 			p.availableIpv6 = slices.Delete(p.availableIpv6, slices.Index(p.availableIpv6, address.String()), slices.Index(p.availableIpv6, address.String())+1)
+			eslog.Noisy("Done")
 			return nil
 		}
 	} else {

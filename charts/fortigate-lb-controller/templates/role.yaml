@@ -24,3 +24,13 @@ rules:
   - "list"
   - "update"
   - "patch"
+- apiGroups:
+  - "rbac.authorization.k8s.io"
+  resources:
+  - "rolebindings"
+  - "roles"
+  verbs:
+  - "get"
+  - "list"
+  - "update"
+  - "patch"

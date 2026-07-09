@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/sncs-uk/fortigate-lb-controller/internal/eslog"
 	"github.com/sncs-uk/fortigate-sdk-go/sdk/auth"
 	forticlient "github.com/sncs-uk/fortigate-sdk-go/sdk/sdkcore"
 )
@@ -79,21 +80,21 @@ func Init() (*FortigateClient, error) {
 		Timeout:   time.Second * 250,
 	}
 
-	slog.Info("Connecting to FortiGate API", slog.String("host", auth.Hostname))
+	eslog.Info("Connecting to FortiGate API", slog.String("host", auth.Hostname))
 
 	forticlient, err := forticlient.NewClient(auth, client)
 	if err != nil {
-		slog.Error("Error connecting to FortiGate API", slog.String("error_message", err.Error()))
+		eslog.Error("Error connecting to FortiGate API", slog.String("error_message", err.Error()))
 		return nil, err
 	}
 
 	err = forticlient.CheckUP()
 	if err != nil {
-		slog.Error("Error connecting to FortiGate API", slog.String("error_message", err.Error()))
+		eslog.Error("Error connecting to FortiGate API", slog.String("error_message", err.Error()))
 		return nil, err
 	}
 
-	slog.Info("Connected to FortiGate API")
+	eslog.Info("Connected to FortiGate API")
 
 	fgclient := new(FortigateClient)
 	fgclient.client = forticlient
@@ -110,7 +111,7 @@ func (c *FortigateClient) getVips() (vips []*forticlient.JSONFirewallObjectVip, 
 		if err == nil {
 			return
 		}
-		slog.Warn("Failed to retrieve VIPs", slog.Int("try", error_count), slog.Int("max_tries", retry_count))
+		eslog.Warn("Failed to retrieve VIPs", slog.Int("try", error_count), slog.Int("max_tries", retry_count))
 		time.Sleep(2 * time.Second)
 	}
 	err = fmt.Errorf("failed to connect to fortigate")
@@ -144,7 +145,7 @@ func (c *FortigateClient) getVip6s() (vips []*forticlient.JSONFirewallObjectVip6
 		if err == nil {
 			return
 		}
-		slog.Warn("Failed to retrieve VIPs", slog.Int("try", error_count), slog.Int("max_tries", retry_count))
+		eslog.Warn("Failed to retrieve VIPs", slog.Int("try", error_count), slog.Int("max_tries", retry_count))
 		time.Sleep(2 * time.Second)
 	}
 	err = fmt.Errorf("failed to connect to fortigate")
